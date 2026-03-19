@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>求职助手 · AI 驱动</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #5B4A3A; --accent: #C4956A; --bg: #FAF7F2;
+      --card: #fff; --text: #1a1a1a; --muted: #666;
+      --border: #e0d8cc; --green: #3d9970; --red: #e74c3c; --amber: #f39c12;
+    }
+    body { font-family: -apple-system,'PingFang SC','Microsoft YaHei',sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; min-height: 100vh; }
+
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar .logo { font-size: 16px; font-weight: 700; color: var(--primary); }
+    .topbar .logo span { color: var(--accent); }
+    .topbar .badge { background: #FFF3E0; color: var(--amber); font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+
+    .container { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+
+    #errorBanner { display: none; background: #FEE2E2; border: 1px solid #FECACA; color: var(--red); padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; }
+    #errorBanner.show { display: block; }
+
+    .steps-bar { display: flex; align-items: center; margin-bottom: 28px; }
+    .step-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #bbb; flex: 1; justify-content: center; }
+    .step-item .dot { width: 24px; height: 24px; border-radius: 50%; background: #e0d8cc; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .step-item .label { white-space: nowrap; }
+    .step-item .line { flex: 1; height: 2px; background: #e0d8cc; margin: 0 4px; max-width: 40px; }
+    .step-item.done .dot, .step-item.active .dot { background: var(--accent); }
+    .step-item.done .label, .step-item.active .label { color: var(--primary); font-weight: 600; }
+    .step-item.done .line { background: var(--accent); }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+
+    .upload-zone { border: 2px dashed #ddd; border-radius: 12px; padding: 36px 24px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: #FFF9F5; }
+    .upload-zone .icon { font-size: 40px; margin-bottom: 12px; }
+    .upload-zone p { font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+    .upload-zone .hint { font-size: 12px; color: #bbb; }
+    .upload-zone input[type="file"] { display: none; }
+
+    #fileInfo { display: none; margin-top: 14px; }
+    #fileInfo.show { display: flex; }
+    .file-badge { display: flex; align-items: center; gap: 10px; background: #F5EDE3; border-radius: 10px; padding: 10px 14px; flex: 1; }
+    .file-badge .fname { font-size: 14px; font-weight: 500; color: var(--primary); }
+    .file-badge .fsize { font-size: 12px; color: var(--muted); }
+    .file-remove { background: none; border: none; cursor: pointer; font-size: 18px; color: #ccc; padding: 6px; border-radius: 6px; }
+    .file-remove:hover { background: #fee; color: var(--red); }
+
+    .field { margin-top: 18px; }
+    .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--primary); }
+    .field input, .field textarea { width: 100%; border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 14px; font-size: 15px; font-family: inherit; background: #FDFCFB; transition: border-color .2s; outline: none; }
+    .field input:focus, .field textarea:focus { border-color: var(--accent); }
+    .field textarea { resize: vertical; min-height: 80px; line-height: 1.7; }
+    .field .tip { font-size: 12px; color: #bbb; margin-top: 5px; }
+
+    .btn-primary { width: 100%; background: linear-gradient(135deg, var(--accent), var(--primary)); color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 20px; transition: opacity .2s, transform .1s; font-family: inherit; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    #loadingSection { display: none; text-align: center; padding: 40px 20px; }
+    #loadingSection.show { display: block; }
+    .loading-icon { font-size: 52px; margin-bottom: 16px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .loading-text { font-size: 16px; color: var(--muted); margin-bottom: 8px; }
+    .loading-sub { font-size: 13px; color: #bbb; }
+    .loading-steps { margin-top: 28px; text-align: left; max-width: 340px; margin-left: auto; margin-right: auto; }
+    .ls-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #ccc; padding: 8px 0; border-bottom: 1px solid #f0ede8; transition: color .3s; }
+    .ls-item::before { content: '○'; font-size: 16px; color: #ddd; }
+    .ls-item.active { color: var(--primary); font-weight: 600; }
+    .ls-item.active::before { content: '●'; color: var(--accent); }
+    .ls-item.done { color: var(--green); }
+    .ls-item.done::before { content: '✓'; color: var(--green); }
+
+    #resultSection { display: none; }
+    #resultSection.show { display: block; }
+
+    #scoreCard { background: linear-gradient(135deg, #FFF3E0, #FFE8D0); border-radius: 16px; padding: 28px 24px; text-align: center; margin-bottom: 16px; }
+    .snum { font-size: 72px; font-weight: 800; line-height: 1; color: var(--primary); letter-spacing: -3px; }
+    .slevel { font-size: 18px; font-weight: 700; color: var(--accent); margin: 6px 0; }
+    .snote { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    #scoreWarning { display: none; background: #FEF3C7; border: 1px solid #FDE68A; color: #92400E; padding: 8px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+
+    .dims { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+    .dim-item { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .dim-hdr { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .dim-name { font-size: 13px; color: var(--muted); }
+    .dim-score { font-size: 13px; font-weight: 700; color: var(--primary); }
+    .dim-bar { height: 6px; background: #f0ede8; border-radius: 3px; overflow: hidden; }
+    .dim-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--primary)); border-radius: 3px; transition: width 1.2s ease; width: 0%; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .tag { padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+    .tag-green { background: #D1FAE5; color: #065F46; }
+    .tag-red { background: #FEE2E2; color: #991B1B; }
+
+    .rsub { font-size: 15px; font-weight: 700; color: var(--primary); margin: 22px 0 10px; display: flex; align-items: center; gap: 6px; }
+    .rsub::before { content: ''; width: 3px; height: 16px; background: var(--accent); border-radius: 2px; }
+
+    .sug-item { background: #FFFBF5; border: 1px solid #F5E6D3; border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+    .sug-sec { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+    .sug-issue { font-size: 13px; color: var(--red); margin-bottom: 4px; }
+    .sug-text { font-size: 13.5px; color: #444; }
+
+    .q-item { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+    .q-num { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+    .q-text { font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 6px; }
+    .q-tip { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-secondary { flex: 1; background: #fff; color: var(--primary); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .2s; }
+    .btn-secondary:hover { background: #faf7f2; }
+
+    .summary-box { background: linear-gradient(135deg, #F5EDE3, #FDFCFB); border-radius: 12px; padding: 16px; font-size: 14.5px; color: #444; line-height: 1.9; border-left: 4px solid var(--accent); margin: 10px 0; }
+
+    .footer { text-align: center; padding: 32px 20px; font-size: 13px; color: #bbb; }
+    .footer span { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">🦞 <span>求职助手</span> · AI 驱动</div>
+  <div class="right"><a href="index.html" style="font-size:13px;color:#C4956A;text-decoration:none;font-weight:600;padding:6px 14px;border:1.5px solid #C4956A;border-radius:20px">← 职位列表</a></div>
+</div>
+
+<div class="container">
+  <div id="errorBanner"></div>
+
+  <!-- 步骤条 -->
+  <div class="steps-bar">
+    <div class="step-item active" id="step1"><div class="dot">1</div><div class="label">上传简历</div></div>
+    <div class="line"></div>
+    <div class="step-item" id="step2"><div class="dot">2</div><div class="label">填写岗位</div></div>
+    <div class="line"></div>
+    <div class="step-item" id="step3"><div class="dot">3</div><div class="label">AI 分析</div></div>
+    <div class="line"></div>
+    <div class="step-item" id="step4"><div class="dot">4</div><div class="label">查看报告</div></div>
+  </div>
+
+  <!-- 上传区 -->
+  <div id="uploadSection">
+    <div class="card">
+      <div class="upload-zone" id="uploadZone">
+        <div class="icon">📄</div>
+        <p>拖拽简历文件到这里，或<span style="color:var(--accent)">点击上传</span></p>
+        <div class="hint">支持 PDF · Word · TXT，文件不超过 10MB</div>
+        <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.txt">
+      </div>
+      <div id="fileInfo">
+        <div class="file-badge">
+          <span id="fileIcon" style="font-size:24px">📕</span>
+          <div>
+            <div class="fname" id="fileName">resume.pdf</div>
+            <div class="fsize" id="fileSize">0 KB</div>
+          </div>
+        </div>
+        <button class="file-remove" id="fileRemove" title="移除">✕</button>
+      </div>
+      <div class="field">
+        <label for="jobTitle">目标岗位 *</label>
+        <input type="text" id="jobTitle" placeholder="例如：高级前端工程师 / 产品经理 / 运营专员" maxlength="60">
+      </div>
+      <div class="field">
+        <label for="jobDescription">岗位描述（选填）</label>
+        <textarea id="jobDescription" placeholder="粘贴岗位的 JD 内容，或填写你认为重要的要求…" maxlength="500"></textarea>
+        <div class="tip">描述越详细，分析结果越精准</div>
+      </div>
+      <button class="btn-primary" onclick="startAnalyze()">🚀 开始 AI 分析</button>
+    </div>
+  </div>
+
+  <!-- 加载态 -->
+  <div id="loadingSection">
+    <div class="loading-icon">🦞</div>
+    <div class="loading-text">AI 正在分析简历…</div>
+    <div class="loading-sub">预计需要 20–60 秒，请耐心等待</div>
+    <div class="loading-steps">
+      <div class="ls-item" id="ls1">读取简历文件</div>
+      <div class="ls-item" id="ls2">提取关键信息</div>
+      <div class="ls-item" id="ls3">匹配岗位要求</div>
+      <div class="ls-item" id="ls4">生成优化建议</div>
+      <div class="ls-item" id="ls5">整理面试问题</div>
+    </div>
+  </div>
+
+  <!-- 结果区 -->
+  <div id="resultSection">
+    <div id="scoreCard">
+      <div id="scoreWarning">⚠️ 匹配度低于 80%，建议优先完善简历薄弱环节</div>
+      <div class="snum"><span id="scoreNum">--</span><span style="font-size:28px">分</span></div>
+      <div class="slevel" id="scoreLevel">--</div>
+      <div class="snote" id="scoreSummary"></div>
+    </div>
+
+    <div class="card">
+      <div class="rsub">📊 维度评分</div>
+      <div class="dims" id="dimList"></div>
+    </div>
+
+    <div class="card">
+      <div class="rsub">💪 简历优势</div>
+      <div class="tags" id="strengthsList"></div>
+    </div>
+
+    <div class="card">
+      <div class="rsub">⚡ 差距与不足</div>
+      <div class="tags" id="gapsList"></div>
+    </div>
+
+    <div class="card">
+      <div class="rsub">📝 简历优化建议</div>
+      <div id="suggestionsList"></div>
+      <div class="rsub" style="margin-top:18px">✨ 优化后个人简介</div>
+      <div class="summary-box" id="optimizedSummary"></div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="copyText('optimizedSummary')">📋 复制简介</button>
+        <button class="btn-secondary" onclick="resetForm()">🔄 重新分析</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="rsub">🎯 模拟面试问题</div>
+      <div id="interviewList"></div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn-secondary" onclick="resetForm()">🔄 再分析一份简历</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">v0.0.1 · Powered by <span>🦞 OpenClaw</span> · <span>Coze AI</span></div>
+
+<script>
+  // ⭐ Coze API 配置（演示场景）
+  const COZE_API_TOKEN = "pat_XHbEkQEbyXMC312jhGANXCXY32cKQ3X2KJSXwqkbghdM4UF7nBn0mmrlYJwhbF2q";
+  const COZE_BOT_ID    = "7585077058503049267";
+  const COZE_API_BASE  = "https://api.coze.cn";
+
+  let selectedFile = null;
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  // 文件处理
+  const resumeFileInput = document.getElementById("resumeFile");
+  const uploadZone = document.getElementById("uploadZone");
+  const fileInfo   = document.getElementById("fileInfo");
+  const fileNameEl = document.getElementById("fileName");
+  const fileIconEl = document.getElementById("fileIcon");
+  const fileSizeEl = document.getElementById("fileSize");
+
+  resumeFileInput.addEventListener("change", e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+  uploadZone.addEventListener("click", () => resumeFileInput.click());
+  uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("drag-over"); });
+  uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("drag-over"));
+  uploadZone.addEventListener("drop", e => { e.preventDefault(); uploadZone.classList.remove("drag-over"); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+  document.getElementById("fileRemove").addEventListener("click", () => { selectedFile=null; resumeFileInput.value=""; fileInfo.classList.remove("show"); });
+
+  function handleFile(file) {
+    const allowed=["pdf","doc","docx","txt"]; const ext=file.name.split(".").pop().toLowerCase();
+    if(!allowed.includes(ext)){showError("文件格式不支持");return;}
+    if(file.size>10*1024*1024){showError("文件不能超过10MB");return;}
+    selectedFile=file;
+    fileNameEl.textContent=file.name; fileSizeEl.textContent=(file.size/1024).toFixed(0)+" KB";
+    fileIconEl.textContent=ext==="pdf"?"📕":ext==="txt"?"📝":"📘";
+    fileInfo.classList.add("show"); hideError();
+  }
+
+  // 文本提取
+  async function extractResumeText(file) {
+    const ext=file.name.split(".").pop().toLowerCase();
+    if(ext==="pdf")  return extractPDF(file);
+    if(ext==="txt")  return extractTxt(file);
+    if(ext==="docx"||ext==="doc") return extractDocx(file);
+    throw new Error("不支持的文件格式");
+  }
+
+  async function extractTxt(file) {
+    return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result.trim());r.onerror=()=>reject(new Error("TXT读取失败"));r.readAsText(file);});
+  }
+
+  async function extractPDF(file) {
+    const data=new Uint8Array(await file.arrayBuffer());
+    const pdf=await pdfjsLib.getDocument({data}).promise;
+    const parts=[];
+    for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const ct=await page.getTextContent();parts.push(ct.items.map(it=>it.str).join(" "));}
+    return parts.join("\n").trim();
+  }
+
+  async function extractDocx(file) {
+    try {
+      const buf=await file.arrayBuffer();
+      const zip=await JSZip.loadAsync(buf);
+      const xml=await zip.file("word/document.xml")?.async("text") || "";
+      const matches=xml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g)||[];
+      return matches.map(m=>m.replace(/<[^>]+>/g,"")).filter(t=>t.trim()).join(" ").trim();
+    } catch(e) { return "[Word文件解析失败]"; }
+  }
+
+  function buildPrompt(resumeText, jobTitle, jobDescription) {
+    return `你是一位专业的求职顾问，请按照以下步骤完成分析，并严格按照指定的 JSON 格式输出结果。\n\n## 用户简历内容\n${resumeText}\n\n## 目标岗位\n岗位名称：${jobTitle}\n岗位描述：${jobDescription||'（用户未提供，请根据岗位名称补全典型岗位要求）'}\n\n## 请完成以下分析，并以 JSON 格式输出：\n\n\`\`\`json\n{\n  "match_score": 85,\n  "match_level": "较高匹配",\n  "dimension_scores": {"技能匹配":90,"工作经验":80,"学历要求":85,"软实力":80},\n  "match_summary": "总体匹配情况描述（100字以内）",\n  "strengths": ["优势1","优势2","优势3"],\n  "gaps": ["差距1","差距2"],\n  "resume_suggestions": [\n    {"section":"工作经历","issue":"存在的问题","suggestion":"具体改进建议"},\n    {"section":"技能清单","issue":"存在的问题","suggestion":"具体改进建议"}\n  ],\n  "optimized_summary": "优化后的个人简介（100-150字，可直接使用）",\n  "interview_questions": [\n    {"question":"面试问题1","tip":"回答思路提示"},\n    {"question":"面试问题2","tip":"回答思路提示"},\n    {"question":"面试问题3","tip":"回答思路提示"},\n    {"question":"面试问题4","tip":"回答思路提示"},\n    {"question":"面试问题5","tip":"回答思路提示"},\n    {"question":"面试问题6","tip":"回答思路提示"},\n    {"question":"面试问题7","tip":"回答思路提示"},\n    {"question":"面试问题8","tip":"回答思路提示"},\n    {"question":"面试问题9","tip":"回答思路提示"},\n    {"question":"面试问题10","tip":"回答思路提示"}\n  ]\n}\n\`\`\`\n\n注意：\n- match_score 为 0-100 的整数\n- 只输出 JSON，不要有任何额外文字\n- 面试问题要结合简历薄弱项和岗位要求定制`;
+  }
+
+  function parseJsonFromResponse(text) {
+    try { return JSON.parse(text.trim()); } catch(e) {}
+    const match=text.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+    if(match){try{return JSON.parse(match[1].trim());}catch(e2){}}
+    return null;
+  }
+
+  async function callCozeBot(prompt) {
+    const initResp=await fetch(`${COZE_API_BASE}/v3/chat`,{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${COZE_API_TOKEN}`,"Content-Type":"application/json"},
+      body:JSON.stringify({bot_id:COZE_BOT_ID,user_id:"job_demo",stream:false,
+        additional_messages:[{role:"user",content:prompt,content_type:"text"}]})
+    });
+    if(!initResp.ok){const txt=await initResp.text();throw new Error(`API请求失败(${initResp.status})`);}
+    const initData=await initResp.json();
+    const chatId=initData?.data?.id; const convId=initData?.data?.conversation_id;
+    if(!chatId) throw new Error("API未返回chat_id");
+
+    const start=Date.now();
+    while(Date.now()-start<120000){
+      await new Promise(r=>setTimeout(r,2000));
+      const retResp=await fetch(`${COZE_API_BASE}/v3/chat/retrieve?chat_id=${chatId}&conversation_id=${convId}`,
+        {headers:{"Authorization":`Bearer ${COZE_API_TOKEN}`}});
+      const retData=await retResp.json();
+      if(retData?.data?.status==="completed"){
+        const msgResp=await fetch(`${COZE_API_BASE}/v3/chat/message/list?chat_id=${chatId}&conversation_id=${convId}`,
+          {headers:{"Authorization":`Bearer ${COZE_API_TOKEN}`}});
+        const msgData=await msgResp.json();
+        const msg=(msgData?.data||[]).find(m=>m.role==="assistant"&&m.type==="answer");
+        if(!msg) throw new Error("未找到有效回复");
+        return msg.content||"";
+      }
+      if(retData?.data?.status==="failed") throw new Error("AI分析失败，请重试");
+    }
+    throw new Error("等待超时，请重试");
+  }
+
+  async function startAnalyze() {
+    hideError();
+    if(!selectedFile){showError("请先上传简历文件");return;}
+    const jobTitle=document.getElementById("jobTitle").value.trim();
+    if(!jobTitle){showError("请填写目标岗位名称");return;}
+    const jobDesc=document.getElementById("jobDescription").value.trim();
+
+    document.getElementById("uploadSection").style.display="none";
+    document.getElementById("loadingSection").classList.add("show");
+    document.getElementById("resultSection").classList.remove("show");
+    animateLoadingSteps();
+
+    try {
+      const resumeText=await extractResumeText(selectedFile);
+      if(!resumeText||resumeText.length<50) throw new Error("简历内容解析失败，请检查文件是否正常");
+      setLSStep(1,"done");setLSStep(2,"done");setLSStep(3,"active");
+      const reply=await callCozeBot(buildPrompt(resumeText,jobTitle,jobDesc));
+      setLSStep(3,"done");setLSStep(4,"done");setLSStep(5,"active");
+      const result=parseJsonFromResponse(reply);
+      if(!result) throw new Error("AI返回格式解析失败，请重试");
+      result.below_threshold=(result.match_score||0)<80;
+      renderResult(result);
+    } catch(err) {
+      document.getElementById("loadingSection").classList.remove("show");
+      document.getElementById("uploadSection").style.display="block";
+      showError(err.message||"分析失败，请重试");
+    }
+  }
+
+  function setLSStep(id,cls){const el=document.getElementById("ls"+id);if(!el)return;el.classList.remove("active","done");if(cls)el.classList.add(cls);}
+  function animateLoadingSteps(){for(let i=1;i<=5;i++)setLSStep(i,null);const order=[1,2,3,4,5];let idx=0;const iv=setInterval(()=>{if(idx<order.length){if(idx>0)setLSStep(order[idx-1],"done");setLSStep(order[idx],"active");idx++;}else{clearInterval(iv);}},2200);}
+
+  function renderResult(data) {
+    document.getElementById("loadingSection").classList.remove("show");
+    document.getElementById("resultSection").classList.add("show");
+    setSteps(4);
+    document.getElementById("scoreNum").textContent=data.match_score??"--";
+    document.getElementById("scoreLevel").textContent=data.match_level??"";
+    document.getElementById("scoreSummary").textContent=data.match_summary??"";
+    const warnEl=document.getElementById("scoreWarning");
+    if(data.below_threshold){warnEl.style.display="block";document.getElementById("scoreCard").style.background="linear-gradient(135deg,#FEF3C7,#FDE68A)";}
+    else{warnEl.style.display="none";}
+
+    const dims=data.dimension_scores||{}; const dimList=document.getElementById("dimList");
+    dimList.innerHTML="";
+    Object.entries(dims).forEach(([name,score])=>{dimList.innerHTML+=`<div class="dim-item"><div class="dim-hdr"><span class="dim-name">${name}</span><span class="dim-score">${score}分</span></div><div class="dim-bar"><div class="dim-fill" data-target="${score}%"></div></div></div>`;});
+    setTimeout(()=>{document.querySelectorAll(".dim-fill").forEach(el=>{el.style.width=el.dataset.target;});},100);
+
+    document.getElementById("strengthsList").innerHTML=(data.strengths||[]).map(s=>`<span class="tag tag-green">${s}</span>`).join("");
+    document.getElementById("gapsList").innerHTML=(data.gaps||[]).map(g=>`<span class="tag tag-red">${g}</span>`).join("");
+    document.getElementById("suggestionsList").innerHTML=(data.resume_suggestions||[]).map(s=>`<div class="sug-item"><div class="sug-sec">${s.section}</div><div class="sug-issue">问题：${s.issue}</div><div class="sug-text">💡 ${s.suggestion}</div></div>`).join("");
+    document.getElementById("optimizedSummary").textContent=data.optimized_summary||"";
+    document.getElementById("interviewList").innerHTML=(data.interview_questions||[]).map((q,i)=>`<div class="q-item"><div class="q-num">问题 ${i+1}</div><div class="q-text">${q.question}</div><div class="q-tip">💬 ${q.tip}</div></div>`).join("");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+
+  function setSteps(active){for(let i=1;i<=4;i++){const el=document.getElementById("step"+i);el.classList.remove("active","done");if(i<active)el.classList.add("done");else if(i===active)el.classList.add("active");}}
+
+  function showError(msg){const el=document.getElementById("errorBanner");el.textContent="❌ "+msg;el.classList.add("show");el.scrollIntoView({behavior:"smooth",block:"center"});}
+  function hideError(){document.getElementById("errorBanner").classList.remove("show");}
+
+  function copyText(id){const t=document.getElementById(id).textContent;navigator.clipboard.writeText(t).then(()=>{alert("已复制！");}).catch(()=>{const e=document.createElement("textarea");e.value=t;document.body.appendChild(e);e.select();document.execCommand("copy");document.body.removeChild(e);alert("已复制！");});}
+
+  function resetForm(){
+    selectedFile=null;document.getElementById("resumeFile").value="";fileInfo.classList.remove("show");
+    document.getElementById("jobTitle").value="";document.getElementById("jobDescription").value="";
+    document.getElementById("resultSection").classList.remove("show");
+    document.getElementById("uploadSection").style.display="block";setSteps(1);hideError();
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+</script>
+
+<style>
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.inland-security-footer {
+  position: fixed;
+  z-index: 10;
+  bottom: 0;
+  right: 0;
+  width: fit-content;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tooltip-container {
+  position: relative;
+}
+
+.trigger-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background-color: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.minimax-link {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 300;
+  color: #adadad;
+  text-decoration: none;
+}
+
+.minimax-link:visited {
+  color: #adadad;
+}
+
+.minimax-link:hover {
+  color: #666666;
+}
+
+.tooltip-content {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  padding-bottom: 16px; /* 8px 内容间距 + 8px 用于鼠标移动的透明区域 */
+  font-size: 12px;
+  line-height: 17px;
+  background-color: #fafafa;
+  border-radius: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: #171717;
+}
+
+/* 创建透明的连接区域，让鼠标可以平滑移动到 tooltip */
+.tooltip-content::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 16px;
+}
+
+.tooltip-container:hover .tooltip-content {
+  display: flex;
+}
+
+.info-section {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.beian-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: #171717;
+}
+
+.beian-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 2px;
+}
+
+.underline-text {
+  color: #171717;
+  text-decoration: underline;
+}
+
+.underline-text:hover {
+  color: #000000;
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .trigger-content {
+    background-color: transparent;
+  }
+
+  .minimax-link,
+  .minimax-link:visited {
+    color: #666666;
+  }
+
+  .minimax-link:hover {
+    color: #adadad;
+  }
+
+  .tooltip-content {
+    background-color: #262626;
+    color: #ededed;
+  }
+
+  .beian-link,
+  .underline-text {
+    color: #ededed;
+  }
+
+  .underline-text:hover {
+    color: #ffffff;
+  }
+}
+
+</style>
+<div class="inland-security-footer">
+  <div class="tooltip-container">
+    <div class="trigger-content">
+      <a href="https://www.minimaxi.com/" target="_blank" rel="noreferrer" class="minimax-link">
+        <span>© 2026 MiniMax</span>
+      </a>
+    </div>
+    <div class="tooltip-content">
+      <section class="info-section">
+        <span>上海稀宇科技有限公司</span>
+      </section>
+
+      <section class="info-section">
+        <a class="beian-link" href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=31010402010179" target="_blank" rel="noreferrer">
+          <img alt="hailuo-beian-icon" src="https://cdn.hailuoai.com/hailuo-video-web/public_assets/223037d3-79fd-4db0-a456-749f38a6a14b.png" class="beian-icon">
+          <span class="underline-text">沪公网安备31010402010179号</span>
+        </a>
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer" class="underline-text">
+          沪ICP备2023003282号-38
+        </a>
+      </section>
+
+      <section class="info-section">
+        <span>模型名称：MiniMax</span>
+        <span>备案号：Shanghai-MiniMax-202505230046</span>
+      </section>
+
+      <section class="info-section">
+        <a href="https://agent.minimaxi.com/doc/zh/terms-of-service.html" target="_blank" rel="noreferrer" class="underline-text">
+          用户协议
+        </a>
+        <a href="https://agent.minimaxi.com/doc/zh/privacy-policy.html" target="_blank" rel="noreferrer" class="underline-text">
+          隐私政策
+        </a>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
+
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
+
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
+    }
+
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
+</script>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function(){
+  function getJob() {
+    const p = new URLSearchParams(location.search);
+    const d = p.get('job');
+    if (!d) return null;
+    try { return JSON.parse(decodeURIComponent(atob(d))); } catch(e) { return null; }
+  }
+
+  const job = getJob();
+  if (job) {
+    document.title = job.company + ' - 职位详情';
+    // Pre-fill form
+    const titleInput = document.getElementById('jobTitle');
+    const descInput  = document.getElementById('jobDescription');
+    if (titleInput) titleInput.value = (job.title && job.title !== '未知岗位' ? job.title : job.company);
+    if (descInput)  descInput.value  = job.fullDesc || job.desc || '';
+
+    // Show job info banner above the card
+    var card = document.querySelector('.card');
+    if (card) {
+      var tagsHtml = '';
+      if (job.city)   tagsHtml += '<span class="job-info-tag">📍 ' + job.city + '</span>';
+      if (job.salary) tagsHtml += '<span class="job-info-tag">💰 ' + job.salary + '</span>';
+      if (job.title && job.title !== '未知岗位')
+        tagsHtml += '<span class="job-info-tag">🏷️ ' + job.title + '</span>';
+
+      var banner = document.createElement('div');
+      banner.className = 'job-info-card';
+      banner.innerHTML = '        <div class="job-info-company">🏢 ' + job.company + '</div>        <div class="job-info-tags">' + tagsHtml + '</div>        <div class="job-info-desc" id="jobDescPreview">' + (job.fullDesc||job.desc||'').replace(/</g,'&lt;').replace(/
+/g,'<br>').slice(0,300) + '...</div>      ';
+      card.parentNode.insertBefore(banner, card);
+    }
+
+    // Auto-scroll to form
+    document.getElementById('uploadSection').scrollIntoView({behavior:'smooth',block:'center'});
+  }
+})();
+</script>
+</body>
+</html>
